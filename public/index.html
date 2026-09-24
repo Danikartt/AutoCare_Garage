@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AutoCare Garage - Gestor de Mantenimiento de Vehículos</title>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <style>
+    .btn-danger {
+      background: linear-gradient(135deg, #e53e3e, #c53030);
+      color: #fff;
+      border: none;
+    }
+
+    .btn-danger:hover {
+      background: linear-gradient(135deg, #c53030, #9b2c2c);
+      transform: translateY(-1px);
+    }
+
+    .toast-danger {
+      background: linear-gradient(135deg, #e53e3e, #c53030) !important;
+    }
+
+    .toast-success {
+      background: linear-gradient(135deg, #38a169, #276749) !important;
+    }
+
+    .danger-zone {
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      padding-top: 0.5rem;
+      margin-top: 0.5rem;
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- Navbar Header -->
+  <header class="navbar">
+    <div class="nav-container">
+      <div class="logo">
+        <span class="logo-icon">🏎️</span>
+        <span class="logo-text">AutoCare <small>Garage</small></span>
+      </div>
+      <nav class="nav-links">
+        <button class="nav-btn active" data-tab="tab-garage">🚘 Mi Garaje</button>
+        <button class="nav-btn" data-tab="tab-alerts">🔴 Alertas Preventivas</button>
+        <button class="nav-btn" data-tab="tab-logs">🛠️ Bitácora de Servicios</button>
+      </nav>
+    </div>
+  </header>
+
+  <!-- Notification Toast -->
+  <div id="toast" class="toast hidden"></div>
+
+  <main class="main-content">
+
+    <!-- Stats Bar -->
+    <div class="stats-bar" id="stats-summary-bar">
+      <div class="stat-card">
+        <span class="stat-icon">🚗</span>
+        <div>
+          <span class="stat-value" id="stat-total-vehicles">0</span>
+          <span class="stat-label">Vehículos en Garaje</span>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <span class="stat-icon">🛠️</span>
+        <div>
+          <span class="stat-value" id="stat-total-services">0</span>
+          <span class="stat-label">Servicios Registrados</span>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <span class="stat-icon">💶</span>
+        <div>
+          <span class="stat-value" id="stat-total-spent">0,00 €</span>
+          <span class="stat-label">Inversión en Mantenimiento</span>
+        </div>
+      </div>
+
+      <div class="stat-card stat-alert">
+        <span class="stat-icon">🚨</span>
+        <div>
+          <span class="stat-value" id="stat-urgent-alerts">0</span>
+          <span class="stat-label">Alertas Urgentes (Rojo)</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 1: MI GARAJE -->
+    <section id="tab-garage" class="tab-content active">
+      <div class="section-title-bar">
+        <div>
+          <h2>Garaje de Vehículos</h2>
+          <p>Supervisa el estado, kilometraje e historial de mantenimientos de tus coches y motos.</p>
+        </div>
+        <div style="display:flex; gap: 0.75rem; align-items:center; flex-wrap:wrap;">
+          <button id="btn-open-add-vehicle-modal" class="btn btn-primary">➕ Añadir Vehículo</button>
+          <button id="btn-reset-database" class="btn btn-danger" title="Borrar toda la base de datos del garaje">🗑️
+            Borrar BD</button>
+        </div>
+      </div>
+
+      <div id="garage-grid" class="garage-grid">
+        <div class="loading">Cargando garaje...</div>
+      </div>
+    </section>
+
+    <!-- TAB 2: ALERTAS PREVENTIVAS -->
+    <section id="tab-alerts" class="tab-content">
+      <div class="section-title-bar">
+        <div>
+          <h2>Diagnóstico y Alertas Preventivas</h2>
+          <p>Supervisión de intervalos de mantenimiento para prevenir averías según el kilometraje actual.</p>
+        </div>
+        <div class="form-group inline-select">
+          <label for="select-alert-vehicle">Filtrar por Vehículo:</label>
+          <select id="select-alert-vehicle" class="form-select"></select>
+        </div>
+      </div>
+
+      <div id="alerts-dashboard" class="alerts-container">
+        <!-- Renderizado dinámico de tarjetas de alerta -->
+      </div>
+    </section>
+
+    <!-- TAB 3: BITÁCORA DE SERVICIOS -->
+    <section id="tab-logs" class="tab-content">
+      <div class="section-title-bar">
+        <div>
+          <h2>Registro de Mantenimientos Realizados</h2>
+          <p>Historial completo de intervenciones, fechas, costes y talleres.</p>
+        </div>
+        <div class="action-row">
+          <select id="select-log-vehicle" class="form-select">
+            <option value="">Todos los vehículos</option>
+          </select>
+          <button id="btn-open-add-log-modal" class="btn btn-primary">+ Registrar Mantenimiento</button>
+        </div>
+      </div>
+
+      <div id="services-timeline" class="services-list">
+        <!-- Renderizado de la bitácora -->
+      </div>
+    </section>
+
+  </main>
+
+  <!-- MODAL: Añadir Vehículo -->
+  <div id="modal-add-vehicle" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>Registrar Nuevo Vehículo</h3>
+        <button class="modal-close" data-modal="modal-add-vehicle">&times;</button>
+      </div>
+      <form id="form-add-vehicle">
+        <div class="modal-body">
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="v-brand">Marca *</label>
+              <input type="text" id="v-brand" class="form-input" placeholder="Ej: Volkswagen, BMW, Yamaha" required>
+            </div>
+            <div class="form-group">
+              <label for="v-model">Modelo *</label>
+              <input type="text" id="v-model" class="form-input" placeholder="Ej: Golf GTI, MT-07" required>
+            </div>
+            <div class="form-group">
+              <label for="v-year">Año de Fabricación *</label>
+              <input type="number" id="v-year" class="form-input" placeholder="Ej: 2022" min="1950" max="2027" required>
+            </div>
+            <div class="form-group">
+              <label for="v-plate">Matrícula *</label>
+              <input type="text" id="v-plate" class="form-input" placeholder="Ej: 1234-LMN" required>
+            </div>
+            <div class="form-group">
+              <label for="v-mileage">Kilometraje Actual (km) *</label>
+              <input type="number" id="v-mileage" class="form-input" placeholder="Ej: 48500" min="0" required>
+            </div>
+            <div class="form-group">
+              <label for="v-fuel">Tipo de Combustible *</label>
+              <select id="v-fuel" class="form-select">
+                <option value="GASOLINA">Gasolina</option>
+                <option value="DIESEL">Diésel</option>
+                <option value="HIBRIDO">Híbrido</option>
+                <option value="ELECTRICO">Eléctrico (EV)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="v-type">Tipo de Vehículo *</label>
+              <select id="v-type" class="form-select">
+                <option value="COCHE">Coche / Automóvil</option>
+                <option value="MOTO">Motocicleta</option>
+                <option value="FURGONETA">Furgoneta / Comercial</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="v-itv">Fecha Próxima ITV (Opcional)</label>
+              <input type="date" id="v-itv" class="form-input">
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline" data-modal="modal-add-vehicle">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Guardar Vehículo 🏎️</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: Actualizar Fecha ITV -->
+  <div id="modal-update-itv" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>Actualizar Fecha de Próxima ITV</h3>
+        <button class="modal-close" data-modal="modal-update-itv">&times;</button>
+      </div>
+      <form id="form-update-itv">
+        <div class="modal-body">
+          <p id="modal-itv-vehicle-info" class="text-muted"></p>
+          <div class="form-group" style="margin-top:1rem;">
+            <label for="new-itv-input">Nueva Fecha de Vencimiento de ITV *</label>
+            <input type="date" id="new-itv-input" class="form-input" required>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline" data-modal="modal-update-itv">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Guardar ITV 📅</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: Actualizar Kilometraje -->
+  <div id="modal-update-mileage" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>Actualizar Kilometraje</h3>
+        <button class="modal-close" data-modal="modal-update-mileage">&times;</button>
+      </div>
+      <form id="form-update-mileage">
+        <div class="modal-body">
+          <p id="modal-mileage-vehicle-info" class="text-muted"></p>
+          <div class="form-group" style="margin-top:1rem;">
+            <label for="new-mileage-input">Nuevo Kilometraje Actual (km) *</label>
+            <input type="number" id="new-mileage-input" class="form-input" min="0" required>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline" data-modal="modal-update-mileage">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Actualizar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: Registrar Mantenimiento -->
+  <div id="modal-add-service" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>Registrar Servicio de Mantenimiento</h3>
+        <button class="modal-close" data-modal="modal-add-service">&times;</button>
+      </div>
+      <form id="form-add-service">
+        <div class="modal-body">
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="s-vehicle">Vehículo *</label>
+              <select id="s-vehicle" class="form-select" required></select>
+            </div>
+            <div class="form-group">
+              <label for="s-type">Tipo de Mantenimiento *</label>
+              <select id="s-type" class="form-select" required></select>
+            </div>
+            <div class="form-group">
+              <label for="s-date">Fecha de Realización *</label>
+              <input type="date" id="s-date" class="form-input" required>
+            </div>
+            <div class="form-group">
+              <label for="s-mileage">Kilometraje al Realizar (km) *</label>
+              <input type="number" id="s-mileage" class="form-input" min="0" required>
+            </div>
+            <div class="form-group">
+              <label for="s-cost">Costo Total (€) *</label>
+              <input type="number" step="0.01" id="s-cost" class="form-input" placeholder="Ej: 135.00" required>
+            </div>
+            <div class="form-group">
+              <label for="s-workshop">Nombre del Taller / Garaje</label>
+              <input type="text" id="s-workshop" class="form-input" placeholder="Ej: Taller Oficial VW, Propio">
+            </div>
+          </div>
+          <div class="form-group" style="margin-top:1rem;">
+            <label for="s-notes">Observaciones / Piezas Cambiadas</label>
+            <textarea id="s-notes" class="form-textarea" rows="2"
+              placeholder="Ej: Cambio de aceite sintético 5W30, filtro y arandela de cárter."></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline" data-modal="modal-add-service">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Registrar Servicio 🛠️</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: Editar Mantenimiento -->
+  <div id="modal-edit-service" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>✏️ Editar Registro de Mantenimiento</h3>
+        <button class="modal-close" data-modal="modal-edit-service">&times;</button>
+      </div>
+      <form id="form-edit-service">
+        <input type="hidden" id="edit-log-id">
+        <div class="modal-body">
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="edit-s-type">Tipo de Mantenimiento *</label>
+              <select id="edit-s-type" class="form-select" required></select>
+            </div>
+            <div class="form-group">
+              <label for="edit-s-date">Fecha de Realización *</label>
+              <input type="date" id="edit-s-date" class="form-input" required>
+            </div>
+            <div class="form-group">
+              <label for="edit-s-mileage">Kilometraje al Realizar (km) *</label>
+              <input type="number" id="edit-s-mileage" class="form-input" min="0" required>
+            </div>
+            <div class="form-group">
+              <label for="edit-s-cost">Costo Total (€) *</label>
+              <input type="number" step="0.01" id="edit-s-cost" class="form-input" required>
+            </div>
+            <div class="form-group">
+              <label for="edit-s-workshop">Nombre del Taller / Garaje</label>
+              <input type="text" id="edit-s-workshop" class="form-input">
+            </div>
+          </div>
+          <div class="form-group" style="margin-top:1rem;">
+            <label for="edit-s-notes">Observaciones / Piezas Cambiadas</label>
+            <textarea id="edit-s-notes" class="form-textarea" rows="2"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline" data-modal="modal-edit-service">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Guardar Cambios ✅</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+
+</html>
