@@ -1,16 +1,16 @@
 # 🚗 AutoCare Garage
 
-**AutoCare Garage** es una aplicación web full-stack para la gestión integral de mantenimiento de vehículos y bitácora de garaje. Permite a los propietarios llevar un control detallado del historial de revisiones, monitorear costos, recibir alertas preventivas según kilometraje o tiempo y gestionar el vencimiento de la ITV.
+**AutoCare Garage** es una aplicación web full-stack para la gestión integral de mantenimiento de vehículos y registro de garaje. Permite a los propietarios llevar un control detallado del historial de revisiones, monitorear costes, recibir alertas preventivas según kilometraje o tiempo y gestionar el vencimiento de la ITV.
 
 ---
 
 ## 🌟 Características Principales
 
 - 🚙 **Gestión de Vehículos**: Alta y administración de turismos y motocicletas (marca, modelo, año, kilometraje actual, matrícula/VIN y tipo de combustible).
-- 🛠️ **Bitácora de Mantenimiento**: Registro de servicios preventivos y correctivos (cambio de aceite, filtro de habitáculo, filtro de aire, filtro de combustible, frenos, ITV, reparaciones en "Otros Servicios", etc.) detallando fecha, kilometraje, costo en €, taller y observaciones.
+- 🛠️ **Registro de Mantenimiento**: Registro de servicios preventivos y correctivos (cambio de aceite, filtro de habitáculo, filtro de aire, filtro de combustible, frenos, ITV, reparaciones en "Otros Servicios", etc.) detallando fecha, kilometraje, coste en €, taller y observaciones.
 - 🔔 **Sistema de Alertas Preventivas**: Algoritmo predictivo e indicador visual de intervenciones requeridas basándose en intervalos estándar de fabricante por kilometraje o fecha límite de ITV.
 - 📊 **Resumen y Financiero**: Dashboard interactivo con métricas del garaje, costo total invertido por vehículo y alertas pendientes.
-- 🔒 **Privacidad de Datos**: Base de datos SQLite local configurada en `.gitignore` para no subir información ni vehículos personales a repositorios públicos de Git/GitHub.
+- 🔒 **Privacidad de Datos**: Base de datos SQLite local configurada en `.gitignore`.
 - 💻 **Interfaz Web Moderna**: Cliente web dinámico, rápido y responsive construido con HTML5, CSS3 vanilla y JavaScript Async/Await.
 
 ---
@@ -105,7 +105,7 @@ npm test
 | `GET` | `/api/v1/vehicles/:id` | Obtiene el detalle de un vehículo específico |
 | `PATCH` | `/api/v1/vehicles/:id/mileage` | Actualiza el kilometraje actual de un vehículo |
 | `PATCH` | `/api/v1/vehicles/:id/itv` | Actualiza la fecha de vencimiento de la ITV |
-| `GET` | `/api/v1/vehicles/:id/services` | Consulta la bitácora de mantenimientos de un vehículo |
+| `GET` | `/api/v1/vehicles/:id/services` | Consulta el registro de mantenimientos de un vehículo |
 | `POST` | `/api/v1/vehicles/:id/services` | Registra un nuevo servicio o mantenimiento |
 | `GET` | `/api/v1/vehicles/:id/alerts` | Obtiene las alertas activas de un vehículo |
 | `GET` | `/api/v1/service-types` | Lista los tipos de servicios de mantenimiento configurados |
