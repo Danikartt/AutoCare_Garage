@@ -590,7 +590,11 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!confirmed2) return;
 
       try {
-        const res = await fetch('/api/v1/reset', { method: 'DELETE' });
+        const res = await fetch('/api/v1/reset', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ confirmPhrase: 'BORRAR_TODO' })
+        });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Error al resetear la base de datos.');
 

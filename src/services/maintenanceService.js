@@ -6,7 +6,9 @@ export class MaintenanceService {
    * Obtiene la lista de tipos de mantenimiento preconfigurados.
    */
   static async getServiceTypes() {
-    const rows = await queryAll(`SELECT id, name, interval_km as intervalKm, category FROM service_types`);
+    const rows = await queryAll(
+      `SELECT id, name, interval_km as intervalKm, interval_months as intervalMonths, category FROM service_types`
+    );
     return rows;
   }
 
@@ -30,11 +32,43 @@ export class MaintenanceService {
       ORDER BY created_at DESC
     `);
 
+    if (rows.length === 0) return [];
+
+    // --- Fix N+1: una sola query para costes y conteo de servicios ---
+    const costRows = await queryAll(`
+      SELECT vehicle_id as vehicleId, SUM(cost_eur) as total, COUNT(*) as cnt
+      FROM maintenance_logs
+      GROUP BY vehicle_id
+    `);
+    const costByVehicle = Object.fromEntries(costRows.map(r => [r.vehicleId, r]));
+
+    // --- Fix N+1: una sola query para el último servicio por (vehículo, tipo) ---
+    const lastServiceRows = await queryAll(`
+      SELECT vehicle_id as vehicleId, service_type_id as serviceTypeId,
+             MAX(mileage_at_service) as lastServiceKm,
+             MAX(service_date) as lastServiceDate
+      FROM maintenance_logs
+      GROUP BY vehicle_id, service_type_id
+    `);
+    // Indexar como { vehicleId: { serviceTypeId: { lastServiceKm, lastServiceDate } } }
+    const lastServiceByVehicle = {};
+    for (const r of lastServiceRows) {
+      if (!lastServiceByVehicle[r.vehicleId]) lastServiceByVehicle[r.vehicleId] = {};
+      lastServiceByVehicle[r.vehicleId][r.serviceTypeId] = {
+        lastServiceKm: r.lastServiceKm,
+        lastServiceDate: r.lastServiceDate
+      };
+    }
+
+    const serviceTypes = await this.getServiceTypes();
+
     const result = [];
     for (const vehicle of rows) {
-      const logs = await queryAll(`SELECT cost_eur FROM maintenance_logs WHERE vehicle_id = ?`, [vehicle.id]);
-      const totalSpentEur = logs.reduce((sum, l) => sum + Number(l.cost_eur || 0), 0);
-      const alerts = await this.getVehicleAlerts(vehicle.id);
+      const costData = costByVehicle[vehicle.id];
+      const totalSpentEur = costData ? Number(costData.total) : 0;
+      const servicesCount = costData ? costData.cnt : 0;
+
+      const alerts = this._computeAlerts(vehicle, serviceTypes, lastServiceByVehicle[vehicle.id] || {});
       const urgentAlertsCount = alerts.filter(a => a.status === 'URGENT').length;
       const warningAlertsCount = alerts.filter(a => a.status === 'WARNING').length;
 
@@ -43,7 +77,7 @@ export class MaintenanceService {
         totalSpentEur: Number(totalSpentEur.toFixed(2)),
         urgentAlertsCount,
         warningAlertsCount,
-        servicesCount: logs.length
+        servicesCount
       });
     }
 
@@ -307,13 +341,10 @@ export class MaintenanceService {
   }
 
   /**
-   * Evalúa y retorna el estado de alertas preventivas utilizando datos de km y calendario para ITV.
+   * Lógica pura de cálculo de alertas a partir de datos ya cargados.
+   * Permite ser usada por getVehicleAlerts() y getAllVehicles() sin queries adicionales.
    */
-  static async getVehicleAlerts(vehicleId) {
-    const vehicle = await queryGet(`SELECT id, current_mileage as currentMileage, itv_expiration_date as itvExpirationDate FROM vehicles WHERE id = ?`, [vehicleId]);
-    if (!vehicle) return [];
-
-    const serviceTypes = await this.getServiceTypes();
+  static _computeAlerts(vehicle, serviceTypes, lastServiceMap) {
     const alerts = [];
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -323,64 +354,111 @@ export class MaintenanceService {
         // Cálculo especial basado en fecha límite de ITV (Calendario)
         const expDate = new Date(vehicle.itvExpirationDate);
         expDate.setHours(0, 0, 0, 0);
-
         const diffTime = expDate.getTime() - today.getTime();
         const daysRemaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
         let status = 'OK';
-        if (daysRemaining < 0) {
-          status = 'URGENT';
-        } else if (daysRemaining <= 30) {
-          status = 'WARNING';
-        }
+        if (daysRemaining < 0) status = 'URGENT';
+        else if (daysRemaining <= 30) status = 'WARNING';
 
         alerts.push({
           serviceTypeId: st.id,
           serviceName: `${st.name} (Por Fecha Calendario)`,
           category: st.category,
           intervalKm: st.intervalKm,
+          intervalMonths: st.intervalMonths,
           itvExpirationDate: vehicle.itvExpirationDate,
           daysRemaining,
           isCalendarBased: true,
           status
         });
-      } else if (st.intervalKm > 0) {
-        // Cálculo por Kilometraje (solo si el intervalo es mayor que 0)
-        const latestLog = await queryGet(`
-          SELECT mileage_at_service as lastServiceKm 
-          FROM maintenance_logs 
-          WHERE vehicle_id = ? AND service_type_id = ? 
-          ORDER BY mileage_at_service DESC 
-          LIMIT 1
-        `, [vehicleId, st.id]);
 
-        const lastServiceKm = latestLog ? latestLog.lastServiceKm : 0;
-        const nextDueKm = lastServiceKm + st.intervalKm;
-        const remainingKm = nextDueKm - vehicle.currentMileage;
+      } else if (st.intervalKm > 0 || st.intervalMonths > 0) {
+        const lastData = lastServiceMap[st.id] || {};
+        const lastServiceKm = lastData.lastServiceKm || 0;
+        const lastServiceDate = lastData.lastServiceDate || null;
 
-        let status = 'OK';
-        if (remainingKm <= 0) {
-          status = 'URGENT';
-        } else if (remainingKm <= 2000) {
-          status = 'WARNING';
+        // -- Alerta por kilometraje --
+        let kmStatus = 'OK';
+        const remainingKm = st.intervalKm > 0
+          ? (lastServiceKm + st.intervalKm) - vehicle.currentMileage
+          : Infinity;
+        if (st.intervalKm > 0) {
+          if (remainingKm <= 0) kmStatus = 'URGENT';
+          else if (remainingKm <= 2000) kmStatus = 'WARNING';
         }
+
+        // -- Alerta por tiempo (interval_months) --
+        let timeStatus = 'OK';
+        let daysOverdue = null;
+        if (st.intervalMonths > 0) {
+          const refDate = lastServiceDate ? new Date(lastServiceDate) : null;
+          if (!refDate) {
+            // Nunca se hizo: URGENT si el intervalo es inferior a 2 años, WARNING si mayor
+            timeStatus = st.intervalMonths <= 24 ? 'URGENT' : 'WARNING';
+          } else {
+            refDate.setHours(0, 0, 0, 0);
+            const dueDateMs = refDate.getTime() + st.intervalMonths * 30.44 * 24 * 60 * 60 * 1000;
+            const msRemaining = dueDateMs - today.getTime();
+            daysOverdue = -Math.ceil(msRemaining / (1000 * 60 * 60 * 24));
+            if (msRemaining < 0) timeStatus = 'URGENT';
+            else if (msRemaining < 30 * 24 * 60 * 60 * 1000) timeStatus = 'WARNING';
+          }
+        }
+
+        // El status final es el más grave entre km y tiempo
+        const severity = { 'URGENT': 2, 'WARNING': 1, 'OK': 0 };
+        const status = severity[kmStatus] >= severity[timeStatus] ? kmStatus : timeStatus;
 
         alerts.push({
           serviceTypeId: st.id,
           serviceName: st.name,
           category: st.category,
           intervalKm: st.intervalKm,
+          intervalMonths: st.intervalMonths,
           lastServiceKm,
-          nextDueKm,
-          remainingKm,
+          lastServiceDate,
+          nextDueKm: st.intervalKm > 0 ? lastServiceKm + st.intervalKm : null,
+          remainingKm: st.intervalKm > 0 ? remainingKm : null,
+          daysOverdue,
           isCalendarBased: false,
           status
         });
       }
-      // Si intervalKm === 0 y no es ITV, el servicio no genera alerta automática (es manual/libre)
+      // Si intervalKm===0 e intervalMonths===0: servicio manual, sin alerta automática
     }
 
     return alerts;
+  }
+
+  /**
+   * Evalúa y retorna el estado de alertas preventivas para un vehículo concreto.
+   * Usa una sola query agrupada en lugar de una por tipo de servicio.
+   */
+  static async getVehicleAlerts(vehicleId) {
+    const vehicle = await queryGet(
+      `SELECT id, current_mileage as currentMileage, itv_expiration_date as itvExpirationDate FROM vehicles WHERE id = ?`,
+      [vehicleId]
+    );
+    if (!vehicle) return [];
+
+    const serviceTypes = await this.getServiceTypes();
+
+    // Una sola query batch en lugar de N queries (una por tipo de servicio)
+    const lastServiceRows = await queryAll(`
+      SELECT service_type_id as serviceTypeId,
+             MAX(mileage_at_service) as lastServiceKm,
+             MAX(service_date) as lastServiceDate
+      FROM maintenance_logs
+      WHERE vehicle_id = ?
+      GROUP BY service_type_id
+    `, [vehicleId]);
+
+    const lastServiceMap = Object.fromEntries(
+      lastServiceRows.map(r => [r.serviceTypeId, { lastServiceKm: r.lastServiceKm, lastServiceDate: r.lastServiceDate }])
+    );
+
+    return this._computeAlerts(vehicle, serviceTypes, lastServiceMap);
   }
 
   /**
@@ -430,9 +508,8 @@ export class MaintenanceService {
     let warningCount = 0;
 
     for (const v of vehicles) {
-      const alerts = await this.getVehicleAlerts(v.id);
-      urgentCount += alerts.filter(a => a.status === 'URGENT').length;
-      warningCount += alerts.filter(a => a.status === 'WARNING').length;
+      urgentCount += v.urgentAlertsCount || 0;
+      warningCount += v.warningAlertsCount || 0;
     }
 
     return {

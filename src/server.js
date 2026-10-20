@@ -133,6 +133,12 @@ app.delete('/api/v1/vehicles/:id', async (req, res) => {
 });
 
 app.delete('/api/v1/reset', async (req, res) => {
+  // Requiere frase de confirmación explícita para evitar borrados accidentales
+  if (req.body?.confirmPhrase !== 'BORRAR_TODO') {
+    return res.status(400).json({
+      error: 'Frase de confirmación requerida. Envía { "confirmPhrase": "BORRAR_TODO" } en el body.'
+    });
+  }
   try {
     const result = await MaintenanceService.resetDatabase();
     res.json(result);

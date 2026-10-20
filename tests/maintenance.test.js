@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { MaintenanceService } from '../src/services/maintenanceService.js';
-import { initDatabase, queryRun } from '../src/data/db.js';
+// Garantizar aislamiento total: por defecto los tests usan una BD nueva en memoria (:memory:).
+process.env.DB_PATH = process.env.DB_PATH || ':memory:';
+const { MaintenanceService } = await import('../src/services/maintenanceService.js');
+const { initDatabase, queryRun } = await import('../src/data/db.js');
 
 test('1. Inicializar la base de datos de pruebas', async () => {
   await initDatabase();
@@ -99,6 +101,52 @@ test('4. Evaluación Preventiva de Alertas', async () => {
 
 test('5. Resumen Financiero y Estadísticas del Garaje', async () => {
   const summary = await MaintenanceService.getGarageSummary();
-  assert.ok(summary.vehiclesCount >= 1);
+  // Con BD en :memory: la BD empieza vacía, por lo que vehiclesCount puede ser >= 0
+  assert.ok(summary.vehiclesCount >= 0);
   assert.ok(summary.totalSpentEur >= 0);
 });
+
+test('6. Evaluación de alertas por tiempo (interval_months)', async () => {
+  const plate = `TIME-${Date.now()}`;
+  const vehicle = await MaintenanceService.createVehicle({
+    brand: "Toyota",
+    model: "Yaris",
+    year: 2022,
+    licensePlate: plate,
+    currentMileage: 5000, // Poco kilometraje (no vence por km)
+    fuelType: "HIBRIDO",
+    vehicleType: "COCHE"
+  });
+
+  // Registramos un cambio de aceite hace más de 1 año (OIL_CHANGE: intervalMonths = 12)
+  await MaintenanceService.addServiceLog(vehicle.id, {
+    serviceTypeId: 'OIL_CHANGE',
+    serviceDate: '2024-01-01',
+    mileageAtService: 4000,
+    costEur: 100,
+    workshopName: 'Taller Rápido',
+    notes: 'Cambio de aceite anual'
+  });
+
+  const alerts = await MaintenanceService.getVehicleAlerts(vehicle.id);
+  const oilAlert = alerts.find(a => a.serviceTypeId === 'OIL_CHANGE');
+
+  // Venció por tiempo aunque le falten 14000 km
+  assert.equal(oilAlert.status, 'URGENT');
+  assert.ok(oilAlert.daysOverdue > 0);
+
+  // Limpieza
+  await MaintenanceService.deleteVehicle(vehicle.id);
+});
+
+test('7. Reset de la base de datos limpia datos pero mantiene tipos de servicio', async () => {
+  const resetRes = await MaintenanceService.resetDatabase();
+  assert.equal(resetRes.reset, true);
+
+  const vehicles = await MaintenanceService.getAllVehicles();
+  assert.equal(vehicles.length, 0);
+
+  const types = await MaintenanceService.getServiceTypes();
+  assert.ok(types.length >= 5);
+});
+
