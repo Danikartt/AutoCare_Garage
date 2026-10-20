@@ -78,6 +78,15 @@ app.patch('/api/v1/vehicles/:id/itv', async (req, res) => {
   }
 });
 
+app.get('/api/v1/logs', async (req, res) => {
+  try {
+    const logs = await MaintenanceService.getAllServiceLogs();
+    res.json(logs);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('/api/v1/vehicles/:id/services', async (req, res) => {
   try {
     const services = await MaintenanceService.getVehicleServiceLogs(req.params.id);

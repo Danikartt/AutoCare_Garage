@@ -156,13 +156,14 @@ document.addEventListener('DOMContentLoaded', () => {
             <button class="btn btn-outline btn-sm btn-update-mileage" data-v-id="${v.id}">⏱️ Actualizar Km</button>
             <button class="btn btn-outline btn-sm btn-update-itv" data-v-id="${v.id}">📅 Fecha ITV</button>
             <button class="btn btn-primary btn-sm btn-quick-service" data-v-id="${v.id}">🛠️ Servicio</button>
+            <button class="btn btn-outline btn-sm btn-export-vehicle-pdf" data-v-id="${v.id}" title="Generar e imprimir informe técnico en PDF">📄 PDF</button>
             <button class="btn btn-danger btn-sm btn-delete-vehicle" data-v-id="${v.id}" data-v-name="${v.brand} ${v.model}">🗑️ Eliminar</button>
           </div>
         </div>
       `;
     }).join('');
 
-    // Handlers for mileage, ITV date, quick service, and delete
+    // Handlers for mileage, ITV date, quick service, export PDF and delete
     document.querySelectorAll('.btn-update-mileage').forEach(btn => {
       btn.addEventListener('click', () => openUpdateMileageModal(btn.getAttribute('data-v-id')));
     });
@@ -173,6 +174,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.querySelectorAll('.btn-quick-service').forEach(btn => {
       btn.addEventListener('click', () => openAddServiceModal(btn.getAttribute('data-v-id')));
+    });
+
+    document.querySelectorAll('.btn-export-vehicle-pdf').forEach(btn => {
+      btn.addEventListener('click', () => exportVehiclePdf(btn.getAttribute('data-v-id')));
     });
 
     document.querySelectorAll('.btn-delete-vehicle').forEach(btn => {
@@ -605,6 +610,645 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
+
+  // --- 9. Exportación a PDF e Impresión ---
+  function openPrintDocument(title, bodyContent) {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      showToast('Ventana emergente bloqueada por el navegador. Permite ventanas emergentes para ver el PDF.', 'danger');
+      return;
+    }
+
+    const html = `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${title}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    @page {
+      size: A4 portrait;
+      margin: 12mm 15mm;
+    }
+    * {
+      box-sizing: border-box;
+      font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+    body {
+      margin: 0;
+      padding: 0;
+      color: #1e293b;
+      background: #ffffff;
+      font-size: 11px;
+      line-height: 1.45;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    .no-print {
+      position: sticky;
+      top: 0;
+      background: #0f172a;
+      color: white;
+      padding: 10px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.18);
+      z-index: 9999;
+    }
+    .no-print button {
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      border-radius: 6px;
+      padding: 6px 14px;
+      border: none;
+    }
+    .btn-print { background: #2563eb; color: white; }
+    .btn-print:hover { background: #1d4ed8; }
+    .btn-close { background: rgba(255,255,255,0.15); color: white; margin-left: 8px; }
+    .btn-close:hover { background: rgba(255,255,255,0.25); }
+    @media print {
+      .no-print { display: none !important; }
+      body { padding: 0; }
+    }
+    .report-wrap {
+      max-width: 820px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .report-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      border-bottom: 2px solid #2563eb;
+      padding-bottom: 12px;
+      margin-bottom: 16px;
+    }
+    .report-logo {
+      font-size: 20px;
+      font-weight: 700;
+      color: #0f172a;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .report-subtitle {
+      font-size: 11px;
+      color: #64748b;
+      margin-top: 3px;
+    }
+    .report-meta {
+      text-align: right;
+      font-size: 10px;
+      color: #64748b;
+    }
+    .report-meta strong {
+      display: block;
+      color: #0f172a;
+      font-size: 12px;
+    }
+    .section-title {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #0f172a;
+      border-bottom: 1px solid #e2e8f0;
+      padding-bottom: 4px;
+      margin: 16px 0 8px 0;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .grid-4 {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .info-box {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      padding: 8px 10px;
+    }
+    .info-label {
+      font-size: 9px;
+      text-transform: uppercase;
+      color: #64748b;
+      font-weight: 600;
+    }
+    .info-val {
+      font-size: 12px;
+      font-weight: 700;
+      color: #0f172a;
+      margin-top: 2px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 14px;
+      font-size: 10.5px;
+    }
+    th, td {
+      border: 1px solid #cbd5e1;
+      padding: 6px 8px;
+      text-align: left;
+    }
+    th {
+      background-color: #f1f5f9;
+      font-weight: 700;
+      color: #334155;
+      text-transform: uppercase;
+      font-size: 9px;
+      letter-spacing: 0.3px;
+    }
+    tr:nth-child(even) td {
+      background-color: #f8fafc;
+    }
+    tr {
+      page-break-inside: avoid;
+    }
+    .badge {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 8px;
+      font-size: 9px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+    .badge-urgent { background: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5; }
+    .badge-warning { background: #fef3c7; color: #b45309; border: 1px solid #fde68a; }
+    .badge-ok { background: #d1fae5; color: #047857; border: 1px solid #a7f3d0; }
+    .footer-note {
+      margin-top: 22px;
+      border-top: 1px solid #e2e8f0;
+      padding-top: 8px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 9.5px;
+      color: #94a3b8;
+    }
+  </style>
+</head>
+<body>
+  <div class="no-print">
+    <div><strong>📄 AutoCare Garage</strong> &mdash; ${title}</div>
+    <div>
+      <button class="btn-print" onclick="window.print()">🖨️ Imprimir / Guardar como PDF</button>
+      <button class="btn-close" onclick="window.close()">❌ Cerrar</button>
+    </div>
+  </div>
+  <div class="report-wrap">
+    ${bodyContent}
+  </div>
+</body>
+</html>`;
+
+    printWindow.document.open();
+    printWindow.document.write(html);
+    printWindow.document.close();
+  }
+
+  // Exportar ficha e historial de un vehículo a PDF
+  async function exportVehiclePdf(vehicleId) {
+    try {
+      showToast('Generando dossier del vehículo...');
+      const res = await fetch(`/api/v1/vehicles/${vehicleId}`);
+      if (!res.ok) throw new Error('No se pudo obtener el detalle del vehículo.');
+      const v = await res.json();
+
+      const emitDate = new Date().toLocaleString('es-ES', { dateStyle: 'long', timeStyle: 'short' });
+      const totalSpentFormatted = Number(v.totalSpentEur || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const icon = v.vehicleType === 'MOTO' ? '🏍️' : v.vehicleType === 'FURGONETA' ? '🚐' : '🏎️';
+
+      // Tabla de Alertas
+      const alertsRows = (v.alerts && v.alerts.length > 0)
+        ? v.alerts.map(a => {
+            let statusBadge = '<span class="badge badge-ok">✅ Al Día</span>';
+            if (a.status === 'URGENT') statusBadge = '<span class="badge badge-urgent">🚨 Urgente</span>';
+            else if (a.status === 'WARNING') statusBadge = '<span class="badge badge-warning">⚠️ Advertencia</span>';
+
+            const lastDone = a.isCalendarBased
+              ? `ITV Límite: ${a.itvExpirationDate || 'N/A'}`
+              : (a.lastServiceKm ? `${a.lastServiceKm.toLocaleString()} km (${a.lastServiceDate || ''})` : 'Sin registros');
+
+            const nextDue = a.isCalendarBased
+              ? (a.daysRemaining !== null ? `${a.daysRemaining} días restantes` : 'N/A')
+              : (a.nextDueKm ? `${a.nextDueKm.toLocaleString()} km (${a.remainingKm !== null ? a.remainingKm.toLocaleString() + ' km rest.' : ''})` : 'Por intervalo');
+
+            const intervals = [
+              a.intervalKm > 0 ? `${a.intervalKm.toLocaleString()} km` : null,
+              a.intervalMonths > 0 ? `${a.intervalMonths} meses` : null
+            ].filter(Boolean).join(' o ') || 'Manual';
+
+            return `
+              <tr>
+                <td><strong>${a.serviceName}</strong></td>
+                <td>${intervals}</td>
+                <td>${lastDone}</td>
+                <td>${nextDue}</td>
+                <td style="text-align:center;">${statusBadge}</td>
+              </tr>
+            `;
+          }).join('')
+        : '<tr><td colspan="5" style="text-align:center; color:#64748b;">No hay alertas configuradas.</td></tr>';
+
+      // Tabla de Historial
+      const historyRows = (v.history && v.history.length > 0)
+        ? v.history.map(h => `
+            <tr>
+              <td><strong>${h.serviceDate}</strong></td>
+              <td>${Number(h.mileageAtService).toLocaleString()} km</td>
+              <td>${h.serviceTypeName || h.serviceTypeId}</td>
+              <td>${h.workshopName || 'Taller General'}</td>
+              <td style="text-align:right; font-weight:600;">${Number(h.costEur || 0).toLocaleString('es-ES', { minimumFractionDigits: 2 })} €</td>
+              <td>${h.notes || '-'}</td>
+            </tr>
+          `).join('')
+        : '<tr><td colspan="6" style="text-align:center; color:#64748b; padding:12px;">No hay intervenciones registradas en el historial de este vehículo.</td></tr>';
+
+      const bodyHtml = `
+        <header class="report-header">
+          <div class="report-brand">
+            <div class="report-logo">🏎️ AutoCare Garage</div>
+            <div class="report-subtitle">Dossier Técnico de Mantenimiento e Historial Mecánico</div>
+          </div>
+          <div class="report-meta">
+            <strong>${v.brand} ${v.model} &mdash; ${v.licensePlate}</strong>
+            <div>Fecha de emisión: ${emitDate}</div>
+            <div>ID Vehículo: ${v.id}</div>
+          </div>
+        </header>
+
+        <div class="section-title">🚘 Ficha Técnica del Vehículo</div>
+        <div class="grid-4">
+          <div class="info-box">
+            <div class="info-label">Vehículo</div>
+            <div class="info-val">${icon} ${v.brand} ${v.model}</div>
+          </div>
+          <div class="info-box">
+            <div class="info-label">Matrícula / VIN</div>
+            <div class="info-val">${v.licensePlate}</div>
+          </div>
+          <div class="info-box">
+            <div class="info-label">Año / Tipo</div>
+            <div class="info-val">${v.year} &bull; ${v.vehicleType}</div>
+          </div>
+          <div class="info-box">
+            <div class="info-label">Combustible</div>
+            <div class="info-val">${v.fuelType}</div>
+          </div>
+          <div class="info-box">
+            <div class="info-label">Kilometraje Actual</div>
+            <div class="info-val">${Number(v.currentMileage).toLocaleString()} km</div>
+          </div>
+          <div class="info-box">
+            <div class="info-label">Próxima ITV</div>
+            <div class="info-val">📅 ${v.itvExpirationDate || 'Sin definir'}</div>
+          </div>
+          <div class="info-box">
+            <div class="info-label">Intervenciones</div>
+            <div class="info-val">${v.history ? v.history.length : 0} servicios</div>
+          </div>
+          <div class="info-box">
+            <div class="info-label">Inversión Total</div>
+            <div class="info-val" style="color:#2563eb;">${totalSpentFormatted} €</div>
+          </div>
+        </div>
+
+        <div class="section-title">🔔 Diagnóstico y Alertas de Mantenimiento Preventivo</div>
+        <table>
+          <thead>
+            <tr>
+              <th>Tipo de Servicio</th>
+              <th>Intervalo Fabricante</th>
+              <th>Última Intervención</th>
+              <th>Próximo Vencimiento</th>
+              <th style="text-align:center;">Estado</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${alertsRows}
+          </tbody>
+        </table>
+
+        <div class="section-title">🛠️ Historial Completo de Mantenimientos Realizados</div>
+        <table>
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Kilometraje</th>
+              <th>Servicio</th>
+              <th>Taller / Profesional</th>
+              <th style="text-align:right;">Coste</th>
+              <th>Observaciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${historyRows}
+          </tbody>
+          <tfoot>
+            <tr style="background:#f1f5f9; font-weight:700;">
+              <td colspan="4" style="text-align:right;">TOTAL INVERTIDO EN MANTENIMIENTO:</td>
+              <td style="text-align:right; color:#2563eb; font-size:12px;">${totalSpentFormatted} €</td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
+
+        <div class="footer-note">
+          <div>Documento generado por <strong>AutoCare Garage</strong> &bull; Bitácora local de mantenimiento.</div>
+          <div>Página 1 de 1 &bull; ${v.licensePlate}</div>
+        </div>
+      `;
+
+      openPrintDocument(`Informe_${v.licensePlate}_${v.brand}_${v.model}`, bodyHtml);
+
+    } catch (err) {
+      showToast(err.message, 'danger');
+    }
+  }
+
+  // Obtiene todos los logs del garaje, con fallback transparente si el servidor aún no implementa /api/v1/logs
+  async function fetchAllLogs(vehicles) {
+    try {
+      const res = await fetch('/api/v1/logs');
+      const contentType = res.headers.get('content-type') || '';
+      if (res.ok && contentType.includes('application/json')) {
+        const data = await res.json();
+        if (Array.isArray(data)) return data;
+      }
+    } catch (_) {
+      // Continuar al fallback
+    }
+
+    // Fallback: consulta los servicios por cada vehículo de forma concurrente
+    const targetVehicles = (vehicles && vehicles.length > 0) ? vehicles : (state.vehicles || []);
+    if (targetVehicles.length === 0) return [];
+
+    const logsPromises = targetVehicles.map(v =>
+      fetch(`/api/v1/vehicles/${v.id}/services`)
+        .then(r => r.json())
+        .then(logs => (Array.isArray(logs) ? logs : []).map(l => ({
+          ...l,
+          vehicleId: v.id,
+          brand: v.brand,
+          model: v.model,
+          licensePlate: v.licensePlate
+        })))
+        .catch(() => [])
+    );
+
+    const arrays = await Promise.all(logsPromises);
+    return arrays.flat().sort((a, b) => new Date(b.serviceDate) - new Date(a.serviceDate));
+  }
+
+  // Exportar informe global del Garaje a PDF
+  async function exportGaragePdf() {
+    try {
+      showToast('Generando informe global del garaje...');
+      const [vRes, summaryRes] = await Promise.all([
+        fetch('/api/v1/vehicles').then(r => r.json()),
+        fetch('/api/v1/summary').then(r => r.json())
+      ]);
+      const logsRes = await fetchAllLogs(vRes);
+
+      const emitDate = new Date().toLocaleString('es-ES', { dateStyle: 'long', timeStyle: 'short' });
+      const totalSpent = Number(summaryRes.totalSpentEur || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+      // Tabla de vehículos
+      const vehicleRows = (vRes && vRes.length > 0)
+        ? vRes.map(v => {
+            const icon = v.vehicleType === 'MOTO' ? '🏍️' : v.vehicleType === 'FURGONETA' ? '🚐' : '🏎️';
+            const alertBadge = v.urgentAlertsCount > 0
+              ? `<span class="badge badge-urgent">🚨 ${v.urgentAlertsCount} urgentes</span>`
+              : (v.warningAlertsCount > 0 ? `<span class="badge badge-warning">⚠️ ${v.warningAlertsCount} avisos</span>` : '<span class="badge badge-ok">✅ Al Día</span>');
+
+            return `
+              <tr>
+                <td><strong>${icon} ${v.brand} ${v.model}</strong> (${v.year})</td>
+                <td><strong>${v.licensePlate}</strong></td>
+                <td>${v.vehicleType} &bull; ${v.fuelType}</td>
+                <td>${Number(v.currentMileage).toLocaleString()} km</td>
+                <td>📅 ${v.itvExpirationDate || 'Sin definir'}</td>
+                <td style="text-align:right; font-weight:600;">${Number(v.totalSpentEur || 0).toLocaleString('es-ES', { minimumFractionDigits: 2 })} €</td>
+                <td style="text-align:center;">${alertBadge}</td>
+              </tr>
+            `;
+          }).join('')
+        : '<tr><td colspan="7" style="text-align:center; color:#64748b;">No hay vehículos registrados en el garaje.</td></tr>';
+
+      // Tabla de últimos 15 servicios
+      const recentLogs = logsRes.slice(0, 15);
+      const recentLogRows = (recentLogs && recentLogs.length > 0)
+        ? recentLogs.map(l => {
+            const veh = vRes.find(v => v.id === l.vehicleId);
+            const vehName = veh ? `${veh.brand} ${veh.model} (${veh.licensePlate})` : l.vehicleId;
+            return `
+              <tr>
+                <td><strong>${l.serviceDate}</strong></td>
+                <td>${vehName}</td>
+                <td>${l.serviceTypeName || l.serviceTypeId}</td>
+                <td>${Number(l.mileageAtService).toLocaleString()} km</td>
+                <td>${l.workshopName || 'Taller General'}</td>
+                <td style="text-align:right; font-weight:600;">${Number(l.costEur || 0).toLocaleString('es-ES', { minimumFractionDigits: 2 })} €</td>
+              </tr>
+            `;
+          }).join('')
+        : '<tr><td colspan="6" style="text-align:center; color:#64748b;">No hay servicios registrados en la bitácora.</td></tr>';
+
+      const bodyHtml = `
+        <header class="report-header">
+          <div class="report-brand">
+            <div class="report-logo">🏎️ AutoCare Garage</div>
+            <div class="report-subtitle">Auditoría Global y Estado Consolidado del Garaje</div>
+          </div>
+          <div class="report-meta">
+            <strong>Informe General del Parque Vehicular</strong>
+            <div>Fecha de emisión: ${emitDate}</div>
+            <div>Total Vehículos: ${summaryRes.vehiclesCount}</div>
+          </div>
+        </header>
+
+        <div class="section-title">📊 Resumen Ejecutivo del Garaje</div>
+        <div class="grid-4">
+          <div class="info-box">
+            <div class="info-label">Vehículos en Garaje</div>
+            <div class="info-val">${summaryRes.vehiclesCount} vehículos</div>
+          </div>
+          <div class="info-box">
+            <div class="info-label">Servicios Registrados</div>
+            <div class="info-val">${summaryRes.totalServicesCount} servicios</div>
+          </div>
+          <div class="info-box">
+            <div class="info-label">Inversión Consolidada</div>
+            <div class="info-val" style="color:#2563eb;">${totalSpent} €</div>
+          </div>
+          <div class="info-box">
+            <div class="info-label">Alertas Críticas Pendientes</div>
+            <div class="info-val" style="color:${summaryRes.urgentAlertsCount > 0 ? '#b91c1c' : '#047857'};">
+              ${summaryRes.urgentAlertsCount > 0 ? `🚨 ${summaryRes.urgentAlertsCount} urgentes` : '🟢 Todo al día'}
+            </div>
+          </div>
+        </div>
+
+        <div class="section-title">🚘 Parque de Vehículos Registrados</div>
+        <table>
+          <thead>
+            <tr>
+              <th>Vehículo</th>
+              <th>Matrícula</th>
+              <th>Tipo &bull; Combustible</th>
+              <th>Km Actual</th>
+              <th>Próxima ITV</th>
+              <th style="text-align:right;">Gasto Total</th>
+              <th style="text-align:center;">Estado Diagnóstico</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${vehicleRows}
+          </tbody>
+          <tfoot>
+            <tr style="background:#f1f5f9; font-weight:700;">
+              <td colspan="5" style="text-align:right;">GASTO TOTAL DEL GARAJE:</td>
+              <td style="text-align:right; color:#2563eb; font-size:12px;">${totalSpent} €</td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
+
+        <div class="section-title">🛠️ Últimos Mantenimientos Realizados</div>
+        <table>
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Vehículo</th>
+              <th>Servicio</th>
+              <th>Kilometraje</th>
+              <th>Taller</th>
+              <th style="text-align:right;">Coste</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${recentLogRows}
+          </tbody>
+        </table>
+
+        <div class="footer-note">
+          <div>Documento de auditoría generado automáticamente por <strong>AutoCare Garage</strong>.</div>
+          <div>Base de datos SQLite local &bull; Confidencial</div>
+        </div>
+      `;
+
+      openPrintDocument('Informe_General_Garaje', bodyHtml);
+
+    } catch (err) {
+      showToast(err.message, 'danger');
+    }
+  }
+
+  // Exportar Bitácora de Servicios a PDF
+  async function exportLogsPdf() {
+    const selectedVId = selectLogVehicle.value;
+    if (selectedVId) {
+      return exportVehiclePdf(selectedVId);
+    }
+
+    try {
+      showToast('Generando historial completo de servicios...');
+      const vRes = (state.vehicles && state.vehicles.length > 0)
+        ? state.vehicles
+        : await fetch('/api/v1/vehicles').then(r => r.json());
+      const logsRes = await fetchAllLogs(vRes);
+
+      const emitDate = new Date().toLocaleString('es-ES', { dateStyle: 'long', timeStyle: 'short' });
+      const totalCost = logsRes.reduce((sum, l) => sum + Number(l.costEur || 0), 0);
+      const totalCostFormatted = totalCost.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+      const logRows = (logsRes && logsRes.length > 0)
+        ? logsRes.map(l => {
+            const veh = vRes.find(v => v.id === l.vehicleId);
+            const vehName = veh ? `${veh.brand} ${veh.model} (${veh.licensePlate})` : l.vehicleId;
+            return `
+              <tr>
+                <td><strong>${l.serviceDate}</strong></td>
+                <td>${vehName}</td>
+                <td>${l.serviceTypeName || l.serviceTypeId}</td>
+                <td>${Number(l.mileageAtService).toLocaleString()} km</td>
+                <td>${l.workshopName || 'Taller General'}</td>
+                <td style="text-align:right; font-weight:600;">${Number(l.costEur || 0).toLocaleString('es-ES', { minimumFractionDigits: 2 })} €</td>
+                <td>${l.notes || '-'}</td>
+              </tr>
+            `;
+          }).join('')
+        : '<tr><td colspan="7" style="text-align:center; color:#64748b; padding:12px;">No hay servicios registrados en la bitácora.</td></tr>';
+
+      const bodyHtml = `
+        <header class="report-header">
+          <div class="report-brand">
+            <div class="report-logo">🏎️ AutoCare Garage</div>
+            <div class="report-subtitle">Bitácora Consolidada de Mantenimientos y Reparaciones</div>
+          </div>
+          <div class="report-meta">
+            <strong>Historial Cronológico de Intervenciones</strong>
+            <div>Fecha de emisión: ${emitDate}</div>
+            <div>Total registros: ${logsRes.length}</div>
+          </div>
+        </header>
+
+        <div class="section-title">🛠️ Detalle Cronológico de Intervenciones</div>
+        <table>
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Vehículo</th>
+              <th>Servicio</th>
+              <th>Kilometraje</th>
+              <th>Taller / Profesional</th>
+              <th style="text-align:right;">Coste</th>
+              <th>Observaciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${logRows}
+          </tbody>
+          <tfoot>
+            <tr style="background:#f1f5f9; font-weight:700;">
+              <td colspan="5" style="text-align:right;">COSTE TOTAL CONSOLIDADO:</td>
+              <td style="text-align:right; color:#2563eb; font-size:12px;">${totalCostFormatted} €</td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
+
+        <div class="footer-note">
+          <div>Documento emitido por <strong>AutoCare Garage</strong> &bull; Control y gestión técnica de vehículos.</div>
+          <div>Página 1 de 1</div>
+        </div>
+      `;
+
+      openPrintDocument('Bitacora_Servicios_AutoCare', bodyHtml);
+
+    } catch (err) {
+      showToast(err.message, 'danger');
+    }
+  }
+
+  // Bind export buttons in header and logs tab
+  document.getElementById('btn-export-garage-pdf')?.addEventListener('click', exportGaragePdf);
+  document.getElementById('btn-export-logs-pdf')?.addEventListener('click', exportLogsPdf);
+
 
   async function refreshAllData() {
     const [vRes, summaryRes] = await Promise.all([

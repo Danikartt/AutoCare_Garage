@@ -238,6 +238,38 @@ export class MaintenanceService {
   }
 
   /**
+   * Obtiene todos los registros de mantenimiento del garaje ordenados por fecha descendente.
+   */
+  static async getAllServiceLogs() {
+    const rows = await queryAll(`
+      SELECT 
+        ml.id, 
+        ml.vehicle_id as vehicleId, 
+        ml.service_type_id as serviceTypeId, 
+        ml.service_date as serviceDate, 
+        ml.mileage_at_service as mileageAtService, 
+        ml.cost_eur as costEur, 
+        ml.workshop_name as workshopName, 
+        ml.notes, 
+        ml.created_at as createdAt,
+        st.name as serviceTypeName,
+        st.category,
+        v.brand,
+        v.model,
+        v.license_plate as licensePlate
+      FROM maintenance_logs ml
+      LEFT JOIN service_types st ON ml.service_type_id = st.id
+      LEFT JOIN vehicles v ON ml.vehicle_id = v.id
+      ORDER BY ml.service_date DESC
+    `);
+
+    return rows.map(log => ({
+      ...log,
+      costEur: Number(log.costEur)
+    }));
+  }
+
+  /**
    * Elimina un registro de mantenimiento por su ID.
    */
   static async deleteServiceLog(logId) {

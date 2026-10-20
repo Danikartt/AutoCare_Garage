@@ -150,3 +150,35 @@ test('7. Reset de la base de datos limpia datos pero mantiene tipos de servicio'
   assert.ok(types.length >= 5);
 });
 
+test('8. Consulta consolidada de todos los servicios del garaje (getAllServiceLogs)', async () => {
+  const plate = `LOGS-${Date.now()}`;
+  const v = await MaintenanceService.createVehicle({
+    brand: "Renault",
+    model: "Clio",
+    year: 2018,
+    licensePlate: plate,
+    currentMileage: 80000,
+    fuelType: "GASOLINA",
+    vehicleType: "COCHE"
+  });
+
+  await MaintenanceService.addServiceLog(v.id, {
+    serviceTypeId: 'OIL_CHANGE',
+    serviceDate: '2026-03-01',
+    mileageAtService: 80000,
+    costEur: 120,
+    workshopName: 'Taller Oficial',
+    notes: 'Revisión periódica'
+  });
+
+  const allLogs = await MaintenanceService.getAllServiceLogs();
+  assert.ok(allLogs.length >= 1);
+  const logFound = allLogs.find(l => l.vehicleId === v.id);
+  assert.ok(logFound);
+  assert.equal(logFound.brand, "Renault");
+  assert.equal(logFound.licensePlate, plate);
+
+  await MaintenanceService.deleteVehicle(v.id);
+});
+
+
