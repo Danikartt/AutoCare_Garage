@@ -59,3 +59,11 @@ data/*.sqlite
 .gemini/commands/specify.toml
 .gemini/commands/tasks.toml
 .gemini/commands/verify.toml
+
+# rsc local state (hooks, seals, logs) and managed skill links — machine-local
+.gemini/rsc/design
+.gemini/rsc/ux
+.gemini/rsc/tidy
+.gemini/rsc/security-audit
+.gemini/rsc/asdd
+.gemini/commands/security-audit.toml
