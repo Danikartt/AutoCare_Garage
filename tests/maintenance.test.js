@@ -181,4 +181,207 @@ test('8. Consulta consolidada de todos los servicios del garaje (getAllServiceLo
   await MaintenanceService.deleteVehicle(v.id);
 });
 
+test('9. Rechaza entradas numéricas inválidas o negativas con error 400', async () => {
+  await assert.rejects(
+    () => MaintenanceService.createVehicle({
+      brand: 'Ford',
+      model: 'Focus',
+      year: 'no-es-año',
+      licensePlate: 'BAD-YEAR',
+      currentMileage: 1000,
+      fuelType: 'GASOLINA',
+      vehicleType: 'COCHE'
+    }),
+    (err) => err.statusCode === 400
+  );
+
+  await assert.rejects(
+    () => MaintenanceService.createVehicle({
+      brand: 'Ford',
+      model: 'Focus',
+      year: 2020,
+      licensePlate: 'BAD-KM',
+      currentMileage: -50,
+      fuelType: 'GASOLINA',
+      vehicleType: 'COCHE'
+    }),
+    (err) => err.statusCode === 400
+  );
+
+  const v = await MaintenanceService.createVehicle({
+    brand: 'Ford',
+    model: 'Focus',
+    year: 2020,
+    licensePlate: `VAL-${Date.now()}`,
+    currentMileage: 10000,
+    fuelType: 'GASOLINA',
+    vehicleType: 'COCHE'
+  });
+
+  await assert.rejects(
+    () => MaintenanceService.updateVehicleMileage(v.id, 'abc'),
+    (err) => err.statusCode === 400
+  );
+
+  await assert.rejects(
+    () => MaintenanceService.addServiceLog(v.id, {
+      serviceTypeId: 'OIL_CHANGE',
+      serviceDate: '2026-10-01',
+      mileageAtService: 11000,
+      costEur: -20
+    }),
+    (err) => err.statusCode === 400
+  );
+
+  await MaintenanceService.deleteVehicle(v.id);
+});
+
+test('10. Creación consecutiva genera IDs únicos sin colisión', async () => {
+  const suffix = Date.now();
+  const [v1, v2] = await Promise.all([
+    MaintenanceService.createVehicle({
+      brand: 'Seat',
+      model: 'Ibiza',
+      year: 2020,
+      licensePlate: `UUID-A-${suffix}`,
+      currentMileage: 1000,
+      fuelType: 'GASOLINA',
+      vehicleType: 'COCHE'
+    }),
+    MaintenanceService.createVehicle({
+      brand: 'Seat',
+      model: 'Arona',
+      year: 2021,
+      licensePlate: `UUID-B-${suffix}`,
+      currentMileage: 2000,
+      fuelType: 'GASOLINA',
+      vehicleType: 'COCHE'
+    })
+  ]);
+
+  assert.notEqual(v1.id, v2.id);
+
+  const [l1, l2] = await Promise.all([
+    MaintenanceService.addServiceLog(v1.id, {
+      serviceTypeId: 'OIL_CHANGE',
+      serviceDate: '2026-10-01',
+      mileageAtService: 1500,
+      costEur: 80
+    }),
+    MaintenanceService.addServiceLog(v1.id, {
+      serviceTypeId: 'CABIN_FILTER',
+      serviceDate: '2026-10-01',
+      mileageAtService: 1500,
+      costEur: 35
+    })
+  ]);
+
+  assert.notEqual(l1.id, l2.id);
+
+  await MaintenanceService.deleteVehicle(v1.id);
+  await MaintenanceService.deleteVehicle(v2.id);
+});
+
+test('11. Edición y borrado de registros de mantenimiento (updateServiceLog / deleteServiceLog)', async () => {
+  const v = await MaintenanceService.createVehicle({
+    brand: 'Volkswagen',
+    model: 'Golf',
+    year: 2022,
+    licensePlate: `EDIT-${Date.now()}`,
+    currentMileage: 20000,
+    fuelType: 'DIESEL',
+    vehicleType: 'COCHE'
+  });
+
+  const log = await MaintenanceService.addServiceLog(v.id, {
+    serviceTypeId: 'OIL_CHANGE',
+    serviceDate: '2026-10-10',
+    mileageAtService: 20000,
+    costEur: 110,
+    workshopName: 'Taller A',
+    notes: 'Inicial'
+  });
+
+  const updated = await MaintenanceService.updateServiceLog(log.id, {
+    serviceTypeId: 'OIL_CHANGE',
+    serviceDate: '2026-10-11',
+    mileageAtService: 20100,
+    costEur: 125.5,
+    workshopName: 'Taller B',
+    notes: 'Corregido'
+  });
+  assert.equal(updated.updated, true);
+
+  const logsAfterUpdate = await MaintenanceService.getVehicleServiceLogs(v.id);
+  assert.equal(logsAfterUpdate.length, 1);
+  assert.equal(logsAfterUpdate[0].costEur, 125.5);
+  assert.equal(logsAfterUpdate[0].workshopName, 'Taller B');
+
+  const deleted = await MaintenanceService.deleteServiceLog(log.id);
+  assert.equal(deleted.deleted, true);
+
+  const logsAfterDelete = await MaintenanceService.getVehicleServiceLogs(v.id);
+  assert.equal(logsAfterDelete.length, 0);
+
+  await MaintenanceService.deleteVehicle(v.id);
+});
+
+test('12. Endpoints HTTP principales en Express (/api/v1/*)', async () => {
+  const { app } = await import('../src/server.js');
+  const server = await new Promise((resolve) => {
+    const s = app.listen(0, '127.0.0.1', () => resolve(s));
+  });
+
+  try {
+    const { port } = server.address();
+    const baseUrl = `http://127.0.0.1:${port}`;
+
+    const typesRes = await fetch(`${baseUrl}/api/v1/service-types`);
+    assert.equal(typesRes.status, 200);
+    const types = await typesRes.json();
+    assert.ok(Array.isArray(types) && types.length >= 5);
+
+    const badRes = await fetch(`${baseUrl}/api/v1/vehicles`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        brand: 'Opel',
+        model: 'Corsa',
+        year: 2020,
+        licensePlate: 'HTTP-BAD',
+        currentMileage: -10,
+        fuelType: 'GASOLINA',
+        vehicleType: 'COCHE'
+      })
+    });
+    assert.equal(badRes.status, 400);
+
+    const createRes = await fetch(`${baseUrl}/api/v1/vehicles`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        brand: 'Opel',
+        model: 'Corsa',
+        year: 2020,
+        licensePlate: `HTTP-${Date.now()}`,
+        currentMileage: 15000,
+        fuelType: 'GASOLINA',
+        vehicleType: 'COCHE'
+      })
+    });
+    assert.equal(createRes.status, 201);
+    const created = await createRes.json();
+
+    const listRes = await fetch(`${baseUrl}/api/v1/vehicles`);
+    assert.equal(listRes.status, 200);
+    const list = await listRes.json();
+    assert.ok(list.some(item => item.id === created.id));
+
+    const delRes = await fetch(`${baseUrl}/api/v1/vehicles/${created.id}`, { method: 'DELETE' });
+    assert.equal(delRes.status, 200);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 

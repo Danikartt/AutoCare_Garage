@@ -166,27 +166,33 @@ app.get('/api/v1/activity-logs', (req, res) => {
 });
 
 // Inicializar la base de datos real en archivo local antes de iniciar el servidor
-await initDatabase();
+const isMainModule = process.argv[1] && path.resolve(process.argv[1]) === __filename;
 
-const server = app.listen(PORT, () => {
-  console.log(`🚗 AutoCare Garage Servidor iniciado con éxito!`);
-  console.log(`🗄️ Base de datos guardada permanentemente en: ${dbFilePath}`);
-  console.log(`👉 Aplicación disponible en: http://localhost:${PORT}`);
-  logActivity('INICIO_APP', `Servidor iniciado con éxito en http://localhost:${PORT}`);
-});
+if (isMainModule) {
+  await initDatabase();
 
-let isShuttingDown = false;
-const handleShutdown = (signal) => {
-  if (isShuttingDown) return;
-  isShuttingDown = true;
-  logActivity('FIN_APP', `Servidor detenido (${signal})`);
-  server.close(() => {
-    process.exit(0);
+  const server = app.listen(PORT, () => {
+    console.log(`🚗 AutoCare Garage Servidor iniciado con éxito!`);
+    console.log(`🗄️ Base de datos guardada permanentemente en: ${dbFilePath}`);
+    console.log(`👉 Aplicación disponible en: http://localhost:${PORT}`);
+    logActivity('INICIO_APP', `Servidor iniciado con éxito en http://localhost:${PORT}`);
   });
-  // Si el servidor HTTP no se cierra inmediatamente, forzar cierre limpio
-  setTimeout(() => process.exit(0), 500);
-};
 
-process.on('SIGINT', () => handleShutdown('SIGINT'));
-process.on('SIGTERM', () => handleShutdown('SIGTERM'));
-process.on('SIGHUP', () => handleShutdown('SIGHUP'));
+  let isShuttingDown = false;
+  const handleShutdown = (signal) => {
+    if (isShuttingDown) return;
+    isShuttingDown = true;
+    logActivity('FIN_APP', `Servidor detenido (${signal})`);
+    server.close(() => {
+      process.exit(0);
+    });
+    // Si el servidor HTTP no se cierra inmediatamente, forzar cierre limpio
+    setTimeout(() => process.exit(0), 500);
+  };
+
+  process.on('SIGINT', () => handleShutdown('SIGINT'));
+  process.on('SIGTERM', () => handleShutdown('SIGTERM'));
+  process.on('SIGHUP', () => handleShutdown('SIGHUP'));
+}
+
+export { app };

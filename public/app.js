@@ -7,6 +7,15 @@ document.addEventListener('DOMContentLoaded', () => {
     summary: null
   };
 
+  function escapeHtml(value) {
+    return String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
   // DOM Elements
   const navBtns = document.querySelectorAll('.nav-btn');
   const tabContents = document.querySelectorAll('.tab-content');
@@ -89,10 +98,11 @@ document.addEventListener('DOMContentLoaded', () => {
     sVehicleSelect.innerHTML = '<option value="">Selecciona vehículo...</option>';
 
     state.vehicles.forEach(v => {
-      const label = `${v.brand} ${v.model} (${v.licensePlate})`;
-      selectAlertVehicle.innerHTML += `<option value="${v.id}">${label}</option>`;
-      selectLogVehicle.innerHTML += `<option value="${v.id}">${label}</option>`;
-      sVehicleSelect.innerHTML += `<option value="${v.id}">${label}</option>`;
+      const id = escapeHtml(v.id);
+      const label = escapeHtml(`${v.brand} ${v.model} (${v.licensePlate})`);
+      selectAlertVehicle.innerHTML += `<option value="${id}">${label}</option>`;
+      selectLogVehicle.innerHTML += `<option value="${id}">${label}</option>`;
+      sVehicleSelect.innerHTML += `<option value="${id}">${label}</option>`;
     });
 
     // Populate service types in Add Service Modal and Edit Service Modal
@@ -102,7 +112,7 @@ document.addEventListener('DOMContentLoaded', () => {
     editTypeSelect.innerHTML = '<option value="">Selecciona tipo de mantenimiento...</option>';
 
     state.serviceTypes.forEach(st => {
-      const opt = `<option value="${st.id}">${st.name}</option>`;
+      const opt = `<option value="${escapeHtml(st.id)}">${escapeHtml(st.name)}</option>`;
       sTypeSelect.innerHTML += opt;
       editTypeSelect.innerHTML += opt;
     });
@@ -117,23 +127,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
     garageGrid.innerHTML = state.vehicles.map(v => {
       const icon = v.vehicleType === 'MOTO' ? '🏍️' : v.vehicleType === 'FURGONETA' ? '🚐' : '🏎️';
-      const itvFormatted = v.itvExpirationDate ? v.itvExpirationDate : 'Sin definir';
+      const itvFormatted = escapeHtml(v.itvExpirationDate ? v.itvExpirationDate : 'Sin definir');
+      const vId = escapeHtml(v.id);
+      const vBrand = escapeHtml(v.brand);
+      const vModel = escapeHtml(v.model);
+      const vPlate = escapeHtml(v.licensePlate);
+      const vFuel = escapeHtml(v.fuelType);
+      const vYear = escapeHtml(v.year);
 
       return `
         <div class="vehicle-card">
           <div>
             <div class="vehicle-header">
               <div class="vehicle-title">
-                <h3>${icon} ${v.brand} ${v.model}</h3>
-                <p>Año: ${v.year} | Combustible: ${v.fuelType}</p>
+                <h3>${icon} ${vBrand} ${vModel}</h3>
+                <p>Año: ${vYear} | Combustible: ${vFuel}</p>
               </div>
-              <span class="vehicle-badge">${v.licensePlate}</span>
+              <span class="vehicle-badge">${vPlate}</span>
             </div>
 
             <div class="vehicle-metrics">
               <div class="metric-item">
                 <span>Kilometraje Actual</span>
-                <strong>${v.currentMileage.toLocaleString()} km</strong>
+                <strong>${Number(v.currentMileage).toLocaleString()} km</strong>
               </div>
               <div class="metric-item">
                 <span>Próxima ITV</span>
@@ -141,7 +157,7 @@ document.addEventListener('DOMContentLoaded', () => {
               </div>
               <div class="metric-item">
                 <span>Inversión Total</span>
-                <strong>${v.totalSpentEur.toLocaleString('es-ES', { minimumFractionDigits: 2 })} €</strong>
+                <strong>${Number(v.totalSpentEur).toLocaleString('es-ES', { minimumFractionDigits: 2 })} €</strong>
               </div>
               <div class="metric-item">
                 <span>Alertas Críticas</span>
@@ -153,11 +169,11 @@ document.addEventListener('DOMContentLoaded', () => {
           </div>
 
           <div class="vehicle-footer-actions" style="flex-wrap: wrap;">
-            <button class="btn btn-outline btn-sm btn-update-mileage" data-v-id="${v.id}">⏱️ Actualizar Km</button>
-            <button class="btn btn-outline btn-sm btn-update-itv" data-v-id="${v.id}">📅 Fecha ITV</button>
-            <button class="btn btn-primary btn-sm btn-quick-service" data-v-id="${v.id}">🛠️ Servicio</button>
-            <button class="btn btn-outline btn-sm btn-export-vehicle-pdf" data-v-id="${v.id}" title="Generar e imprimir informe técnico en PDF">📄 PDF</button>
-            <button class="btn btn-danger btn-sm btn-delete-vehicle" data-v-id="${v.id}" data-v-name="${v.brand} ${v.model}">🗑️ Eliminar</button>
+            <button class="btn btn-outline btn-sm btn-update-mileage" data-v-id="${vId}">⏱️ Actualizar Km</button>
+            <button class="btn btn-outline btn-sm btn-update-itv" data-v-id="${vId}">📅 Fecha ITV</button>
+            <button class="btn btn-primary btn-sm btn-quick-service" data-v-id="${vId}">🛠️ Servicio</button>
+            <button class="btn btn-outline btn-sm btn-export-vehicle-pdf" data-v-id="${vId}" title="Generar e imprimir informe técnico en PDF">📄 PDF</button>
+            <button class="btn btn-danger btn-sm btn-delete-vehicle" data-v-id="${vId}" data-v-name="${vBrand} ${vModel}">🗑️ Eliminar</button>
           </div>
         </div>
       `;
@@ -210,18 +226,18 @@ document.addEventListener('DOMContentLoaded', () => {
       results.forEach(({ vehicle, alerts }) => {
         html += `
           <div class="wizard-card" style="margin-bottom:1.5rem;">
-            <h3 style="margin-bottom:1rem;">🚘 ${vehicle.brand} ${vehicle.model} (${vehicle.licensePlate}) - Km Actual: ${vehicle.currentMileage.toLocaleString()} km</h3>
+            <h3 style="margin-bottom:1rem;">🚘 ${escapeHtml(vehicle.brand)} ${escapeHtml(vehicle.model)} (${escapeHtml(vehicle.licensePlate)}) - Km Actual: ${Number(vehicle.currentMileage).toLocaleString()} km</h3>
             <div class="alerts-container">
               ${alerts.map(a => {
                 if (a.isCalendarBased) {
                   return `
-                    <div class="alert-card status-${a.status}">
+                    <div class="alert-card status-${escapeHtml(a.status)}">
                       <div class="alert-info">
-                        <h4>📅 ${a.serviceName}</h4>
-                        <p>Fecha Vencimiento Registrada: <strong>${a.itvExpirationDate || 'Sin definir'}</strong></p>
+                        <h4>📅 ${escapeHtml(a.serviceName)}</h4>
+                        <p>Fecha Vencimiento Registrada: <strong>${escapeHtml(a.itvExpirationDate || 'Sin definir')}</strong></p>
                       </div>
                       <div style="text-align:right;">
-                        <span class="alert-status-tag tag-${a.status}">
+                        <span class="alert-status-tag tag-${escapeHtml(a.status)}">
                           ${a.status === 'URGENT' ? `🔴 ITV CADUCADA (Hace ${Math.abs(a.daysRemaining)} días)` :
                             a.status === 'WARNING' ? `🟡 ITV Vence Pronto (En ${a.daysRemaining} días)` : 
                             `🟢 ITV Al Día (Vence en ${a.daysRemaining} días)`}
@@ -232,13 +248,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 return `
-                  <div class="alert-card status-${a.status}">
+                  <div class="alert-card status-${escapeHtml(a.status)}">
                     <div class="alert-info">
-                      <h4>${a.serviceName}</h4>
+                      <h4>${escapeHtml(a.serviceName)}</h4>
                       <p>Último servicio: ${a.lastServiceKm > 0 ? `${a.lastServiceKm.toLocaleString()} km` : 'Sin registro prev.'} | Próximo recomendado: <strong>${a.nextDueKm.toLocaleString()} km</strong></p>
                     </div>
                     <div style="text-align:right;">
-                      <span class="alert-status-tag tag-${a.status}">
+                      <span class="alert-status-tag tag-${escapeHtml(a.status)}">
                         ${a.status === 'URGENT' ? `🔴 Vencido (${Math.abs(a.remainingKm).toLocaleString()} km pasados)` :
                           a.status === 'WARNING' ? `🟡 Revisar Pronto (${a.remainingKm.toLocaleString()} km rest.)` : 
                           `🟢 Al Día (${a.remainingKm.toLocaleString()} km rest.)`}
@@ -286,23 +302,23 @@ document.addEventListener('DOMContentLoaded', () => {
       servicesTimeline.innerHTML = allLogs.map(log => `
         <div class="service-item-card">
           <div class="service-main">
-            <h4>${log.serviceTypeName} <small style="font-size:0.8rem; color:var(--primary);">(${log.vehicleName})</small></h4>
-            <p>📅 Fecha: <strong>${log.serviceDate}</strong> | ⏱️ Kilometraje: <strong>${log.mileageAtService.toLocaleString()} km</strong></p>
-            <p>🏪 Taller: ${log.workshopName || 'Taller General'} ${log.notes ? `| 📝 ${log.notes}` : ''}</p>
+            <h4>${escapeHtml(log.serviceTypeName)} <small style="font-size:0.8rem; color:var(--primary);">(${escapeHtml(log.vehicleName)})</small></h4>
+            <p>📅 Fecha: <strong>${escapeHtml(log.serviceDate)}</strong> | ⏱️ Kilometraje: <strong>${Number(log.mileageAtService).toLocaleString()} km</strong></p>
+            <p>🏪 Taller: ${escapeHtml(log.workshopName || 'Taller General')} ${log.notes ? `| 📝 ${escapeHtml(log.notes)}` : ''}</p>
           </div>
           <div style="display:flex; flex-direction:column; align-items:flex-end; gap:0.5rem;">
-            <div class="service-price">${log.costEur.toLocaleString('es-ES', { minimumFractionDigits: 2 })} €</div>
+            <div class="service-price">${Number(log.costEur).toLocaleString('es-ES', { minimumFractionDigits: 2 })} €</div>
             <div style="display:flex; gap:0.4rem;">
               <button class="btn btn-outline btn-sm btn-edit-log"
-                data-log-id="${log.id}"
-                data-service-type="${log.serviceTypeId}"
-                data-date="${log.serviceDate}"
-                data-mileage="${log.mileageAtService}"
-                data-cost="${log.costEur}"
-                data-workshop="${log.workshopName || ''}"
-                data-notes="${log.notes || ''}"
+                data-log-id="${escapeHtml(log.id)}"
+                data-service-type="${escapeHtml(log.serviceTypeId)}"
+                data-date="${escapeHtml(log.serviceDate)}"
+                data-mileage="${escapeHtml(log.mileageAtService)}"
+                data-cost="${escapeHtml(log.costEur)}"
+                data-workshop="${escapeHtml(log.workshopName || '')}"
+                data-notes="${escapeHtml(log.notes || '')}"
               >✏️ Editar</button>
-              <button class="btn btn-danger btn-sm btn-delete-log" data-log-id="${log.id}">🗑️</button>
+              <button class="btn btn-danger btn-sm btn-delete-log" data-log-id="${escapeHtml(log.id)}">🗑️</button>
             </div>
           </div>
         </div>
@@ -803,7 +819,7 @@ document.addEventListener('DOMContentLoaded', () => {
 </head>
 <body>
   <div class="no-print">
-    <div><strong>📄 AutoCare Garage</strong> &mdash; ${title}</div>
+    <div><strong>📄 AutoCare Garage</strong> &mdash; ${escapeHtml(title)}</div>
     <div>
       <button class="btn-print" onclick="window.print()">🖨️ Imprimir / Guardar como PDF</button>
       <button class="btn-close" onclick="window.close()">❌ Cerrar</button>
@@ -854,10 +870,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
             return `
               <tr>
-                <td><strong>${a.serviceName}</strong></td>
-                <td>${intervals}</td>
-                <td>${lastDone}</td>
-                <td>${nextDue}</td>
+                <td><strong>${escapeHtml(a.serviceName)}</strong></td>
+                <td>${escapeHtml(intervals)}</td>
+                <td>${escapeHtml(lastDone)}</td>
+                <td>${escapeHtml(nextDue)}</td>
                 <td style="text-align:center;">${statusBadge}</td>
               </tr>
             `;
@@ -868,12 +884,12 @@ document.addEventListener('DOMContentLoaded', () => {
       const historyRows = (v.history && v.history.length > 0)
         ? v.history.map(h => `
             <tr>
-              <td><strong>${h.serviceDate}</strong></td>
+              <td><strong>${escapeHtml(h.serviceDate)}</strong></td>
               <td>${Number(h.mileageAtService).toLocaleString()} km</td>
-              <td>${h.serviceTypeName || h.serviceTypeId}</td>
-              <td>${h.workshopName || 'Taller General'}</td>
+              <td>${escapeHtml(h.serviceTypeName || h.serviceTypeId)}</td>
+              <td>${escapeHtml(h.workshopName || 'Taller General')}</td>
               <td style="text-align:right; font-weight:600;">${Number(h.costEur || 0).toLocaleString('es-ES', { minimumFractionDigits: 2 })} €</td>
-              <td>${h.notes || '-'}</td>
+              <td>${escapeHtml(h.notes || '-')}</td>
             </tr>
           `).join('')
         : '<tr><td colspan="6" style="text-align:center; color:#64748b; padding:12px;">No hay intervenciones registradas en el historial de este vehículo.</td></tr>';
@@ -885,9 +901,9 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="report-subtitle">Dossier Técnico de Mantenimiento e Historial Mecánico</div>
           </div>
           <div class="report-meta">
-            <strong>${v.brand} ${v.model} &mdash; ${v.licensePlate}</strong>
-            <div>Fecha de emisión: ${emitDate}</div>
-            <div>ID Vehículo: ${v.id}</div>
+            <strong>${escapeHtml(v.brand)} ${escapeHtml(v.model)} &mdash; ${escapeHtml(v.licensePlate)}</strong>
+            <div>Fecha de emisión: ${escapeHtml(emitDate)}</div>
+            <div>ID Vehículo: ${escapeHtml(v.id)}</div>
           </div>
         </header>
 
@@ -895,19 +911,19 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="grid-4">
           <div class="info-box">
             <div class="info-label">Vehículo</div>
-            <div class="info-val">${icon} ${v.brand} ${v.model}</div>
+            <div class="info-val">${icon} ${escapeHtml(v.brand)} ${escapeHtml(v.model)}</div>
           </div>
           <div class="info-box">
             <div class="info-label">Matrícula / VIN</div>
-            <div class="info-val">${v.licensePlate}</div>
+            <div class="info-val">${escapeHtml(v.licensePlate)}</div>
           </div>
           <div class="info-box">
             <div class="info-label">Año / Tipo</div>
-            <div class="info-val">${v.year} &bull; ${v.vehicleType}</div>
+            <div class="info-val">${escapeHtml(v.year)} &bull; ${escapeHtml(v.vehicleType)}</div>
           </div>
           <div class="info-box">
             <div class="info-label">Combustible</div>
-            <div class="info-val">${v.fuelType}</div>
+            <div class="info-val">${escapeHtml(v.fuelType)}</div>
           </div>
           <div class="info-box">
             <div class="info-label">Kilometraje Actual</div>
@@ -915,7 +931,7 @@ document.addEventListener('DOMContentLoaded', () => {
           </div>
           <div class="info-box">
             <div class="info-label">Próxima ITV</div>
-            <div class="info-val">📅 ${v.itvExpirationDate || 'Sin definir'}</div>
+            <div class="info-val">📅 ${escapeHtml(v.itvExpirationDate || 'Sin definir')}</div>
           </div>
           <div class="info-box">
             <div class="info-label">Intervenciones</div>

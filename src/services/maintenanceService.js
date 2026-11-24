@@ -1,5 +1,26 @@
+import crypto from 'node:crypto';
 import { queryAll, queryGet, queryRun } from '../data/db.js';
 import { logActivity } from '../utils/logger.js';
+
+function parseNonNegativeNumber(value, fieldName) {
+  const num = Number(value);
+  if (value === '' || value === null || value === undefined || !Number.isFinite(num) || num < 0) {
+    const error = new Error(`El campo ${fieldName} debe ser un número válido mayor o igual que 0.`);
+    error.statusCode = 400;
+    throw error;
+  }
+  return num;
+}
+
+function parseValidYear(value) {
+  const yearNum = Number(value);
+  if (!Number.isInteger(yearNum) || yearNum < 1900 || yearNum > 2100) {
+    const error = new Error('El año del vehículo debe ser un entero válido entre 1900 y 2100.');
+    error.statusCode = 400;
+    throw error;
+  }
+  return yearNum;
+}
 
 export class MaintenanceService {
   /**
@@ -132,6 +153,9 @@ export class MaintenanceService {
       throw error;
     }
 
+    const yearNum = parseValidYear(year);
+    const mileageNum = parseNonNegativeNumber(currentMileage, 'kilometraje actual');
+
     const plateClean = licensePlate.trim().toUpperCase();
     const existing = await queryGet(`SELECT id FROM vehicles WHERE UPPER(license_plate) = ?`, [plateClean]);
     if (existing) {
@@ -141,12 +165,12 @@ export class MaintenanceService {
     }
 
     const vehicle = {
-      id: `veh-${Date.now()}`,
+      id: `veh-${crypto.randomUUID()}`,
       brand: brand.trim(),
       model: model.trim(),
-      year: Number(year),
+      year: yearNum,
       licensePlate: plateClean,
-      currentMileage: Number(currentMileage),
+      currentMileage: mileageNum,
       fuelType,
       vehicleType,
       itvExpirationDate: itvExpirationDate || null,
@@ -179,9 +203,9 @@ export class MaintenanceService {
    */
   static async updateVehicleMileage(vehicleId, newMileage) {
     const vehicle = await this.getVehicleById(vehicleId);
-    const mileageNum = Number(newMileage);
+    const mileageNum = parseNonNegativeNumber(newMileage, 'kilometraje');
 
-    if (isNaN(mileageNum) || mileageNum < vehicle.currentMileage) {
+    if (mileageNum < vehicle.currentMileage) {
       const error = new Error('El nuevo kilometraje debe ser igual o mayor al kilometraje actual registrado.');
       error.statusCode = 400;
       throw error;
@@ -299,6 +323,9 @@ export class MaintenanceService {
       error.statusCode = 400;
       throw error;
     }
+    const mileageNum = parseNonNegativeNumber(mileageAtService, 'kilometraje');
+    const costNum = parseNonNegativeNumber(costEur, 'coste');
+
     await queryRun(`
       UPDATE maintenance_logs
       SET service_type_id = ?, service_date = ?, mileage_at_service = ?, cost_eur = ?, workshop_name = ?, notes = ?
@@ -306,13 +333,13 @@ export class MaintenanceService {
     `, [
       serviceTypeId,
       serviceDate,
-      Number(mileageAtService),
-      Number(Number(costEur).toFixed(2)),
+      mileageNum,
+      Number(costNum.toFixed(2)),
       workshopName.trim() || 'Taller General',
       notes.trim(),
       logId
     ]);
-    logActivity('ACTUALIZAR_SERVICIO', `Actualizado servicio ID: ${logId} (${serviceTypeId}, ${costEur} €, ${mileageAtService} km)`);
+    logActivity('ACTUALIZAR_SERVICIO', `Actualizado servicio ID: ${logId} (${serviceTypeId}, ${costNum.toFixed(2)} €, ${mileageNum} km)`);
     return { updated: true, logId };
   }
 
@@ -328,8 +355,8 @@ export class MaintenanceService {
       throw error;
     }
 
-    const mileageNum = Number(mileageAtService);
-    const costNum = Number(costEur);
+    const mileageNum = parseNonNegativeNumber(mileageAtService, 'kilometraje');
+    const costNum = parseNonNegativeNumber(costEur, 'coste');
 
     // Actualizar kilometraje si el del servicio es mayor
     if (mileageNum > vehicle.currentMileage) {
@@ -341,7 +368,7 @@ export class MaintenanceService {
     // ya que depende del tipo y antigüedad del vehículo.
 
     const log = {
-      id: `log-${Date.now()}`,
+      id: `log-${crypto.randomUUID()}`,
       vehicleId,
       serviceTypeId,
       serviceDate,
